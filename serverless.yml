@@ -28,7 +28,7 @@ custom:
   # in your functions in the event.stageVariables
   stageVariables:
     bucketName: ${self:custom.bucket_name}
-    endpoint: {"Fn::Join": ["", ["https://", { "Fn::GetAtt": "CloudFrontEndpoint.DomainName" }, "/"]]}
+    # endpoint: {"Fn::Join": ["", ["https://", { "Fn::GetAtt": "CloudFrontEndpoint.DomainName" }, "/"]]}
 
 provider:
   name: aws
@@ -40,6 +40,12 @@ provider:
   apiGateway:
     apiKeys:
       - adb-thumbnail-api-key
+
+  ecr:
+    # In this section you can define images that will be built locally and uploaded to ECR
+    images:
+      appimage:
+        path: ./
 
   # We need to give the lambda functions access to list and write to our bucket, it needs:
   # - to be able to 'list' the bucket
@@ -58,17 +64,18 @@ provider:
 #    variable1: value1
 
 # you can add packaging information here
-#package:
-#  patterns:
-#    - '!exclude-me.js'
-#    - '!exclude-me-dir/**'
-#    - include-me.js
-#    - include-me-dir/**
+# https://stackoverflow.com/a/63383024/4086981
+# To solve: Unzipped size must be smaller than 262144000 bytes - AWS Lambda Error
+package:
+  exclude:
+    - node_modules/**
 
 functions:
   takeScreenshot:
-    handler: src/take-screenshot.takeScreenshot
+    # handler: src/take-screenshot.takeScreenshot
     timeout: 15  # our screenshots can take a while sometimes
+    image:
+      name: appimage
     events:
       - http:
           path: /screenshot
@@ -80,7 +87,7 @@ functions:
             parameters:
               querystrings:
                 url: true
- 
+
   # listScreenshots:
   #   handler: handler.list_screenshots
   #   timeout: 15
@@ -104,7 +111,11 @@ functions:
   #         event: s3:ObjectCreated:*
           
 resources:
-  # Resources:
+  Resources:
+    ThumbnailBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucket_name}
     # Create an endpoint for the S3 bucket in CloudFront
     # this configuration basically just sets up a forwarding of requests
     # to S3, and forces all traffic to https

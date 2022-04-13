@@ -24,10 +24,10 @@ export const takeScreenshot = async (event) => {
 
   const targetBucket = event.stageVariables.bucketName;
   const targetHash = crypto.createHash('md5').update(targetUrl).digest('hex');
-  const targetFilename = `${targetHash}/original.png`;
+  const targetFilename = `${targetHash}/original.jpeg`;
   console.log(`Snapshotting ${targetUrl} to s3://${targetBucket}/${targetFilename}`);
 
-  const path = env === 'local' ? `tmp/${targetHash}.png` : `/tmp/${targetHash}.png`
+  // const path = env === 'local' ? `tmp/${targetHash}.png` : `/tmp/${targetHash}.png`
 
   try {
     // if (await fileExists(path)) {
@@ -36,11 +36,12 @@ export const takeScreenshot = async (event) => {
     //   fs.unlinkSync(path)
     // }
 
-    const capturedImage = await captureWebsite.buffer(targetUrl, path, {
+    const capturedImage = await captureWebsite.buffer(targetUrl, {
       timeout,
       width: 1920,
       height: 1080,
-      disableAnimations: true
+      disableAnimations: true,
+      type: 'jpeg'
     })
 
     // Upload capturedImage into s3 butcket.
@@ -49,7 +50,7 @@ export const takeScreenshot = async (event) => {
       Key: targetFilename,
       Body: capturedImage,
       Bucket: targetBucket,
-      ContentType: 'image/png',
+      ContentType: 'image/jpeg',
     });
     await client.send(command)
   } catch (error) {
