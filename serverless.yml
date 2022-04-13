@@ -37,8 +37,9 @@ provider:
   region: us-east-1
 
   # We want to lock down the ApiGateway, so we can control who can use the api
-  apiKeys:
-    - thumbnail-api-key
+  apiGateway:
+    apiKeys:
+      - adb-thumbnail-api-key
 
   # We need to give the lambda functions access to list and write to our bucket, it needs:
   # - to be able to 'list' the bucket
@@ -51,6 +52,7 @@ provider:
               - "s3:ListBucket"
               - "s3:PutObject"
           Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ThumbnailBucket" } ] ]  }
+
 # you can define service wide environment variables here
 #  environment:
 #    variable1: value1
@@ -62,13 +64,14 @@ provider:
 #    - '!exclude-me-dir/**'
 #    - include-me.js
 #    - include-me-dir/**
+
 functions:
   takeScreenshot:
-    handler: handler.take_screenshot
+    handler: src/take-screenshot.takeScreenshot
     timeout: 15  # our screenshots can take a while sometimes
     events:
       - http:
-          path: screenshots
+          path: /screenshot
           method: post
           # Marking the function as private will require a valid api-key
           private: true
@@ -78,60 +81,57 @@ functions:
               querystrings:
                 url: true
  
-  listScreenshots:
-    handler: handler.list_screenshots
-    timeout: 15
-    events:
-      - http:
-          path: screenshots
-          method: get
-          private: true
-          request:
-            parameters:
-              querystrings:
-                url: true
+  # listScreenshots:
+  #   handler: handler.list_screenshots
+  #   timeout: 15
+  #   events:
+  #     - http:
+  #         path: screenshots
+  #         method: get
+  #         private: true
+  #         request:
+  #           parameters:
+  #             querystrings:
+  #               url: true
  
-  createThumbnails:
-    handler: handler.create_thumbnails
-    events:
-      # this event type will also create the screenshots bucket and trigger
-      # the lambda function every time a file is uploaded (ObjectCreated)
-      - s3:
-          bucket: ${self:custom.bucket_name}
-          event: s3:ObjectCreated:*
+  # createThumbnails:
+  #   handler: handler.create_thumbnails
+  #   events:
+  #     # this event type will also create the screenshots bucket and trigger
+  #     # the lambda function every time a file is uploaded (ObjectCreated)
+  #     - s3:
+  #         bucket: ${self:custom.bucket_name}
+  #         event: s3:ObjectCreated:*
           
 resources:
-  Resources:
+  # Resources:
     # Create an endpoint for the S3 bucket in CloudFront
     # this configuration basically just sets up a forwarding of requests
     # to S3, and forces all traffic to https
-    CloudFrontEndpoint:
-      Type: AWS::CloudFront::Distribution
-      Properties:
-        DistributionConfig:
-          Enabled: True
-          DefaultCacheBehavior:
-            TargetOriginId: ScreenshotBucketOrigin
-            ViewerProtocolPolicy: redirect-to-https
-            ForwardedValues:
-              QueryString: True
-          Origins:
-            -
-              Id: ScreenshotBucketOrigin
-              DomainName: ${self:custom.bucket_name}.s3.amazonaws.com
-              CustomOriginConfig:
-                OriginProtocolPolicy: http-only
+    # CloudFrontEndpoint:
+    #   Type: AWS::CloudFront::Distribution
+    #   Properties:
+    #     DistributionConfig:
+    #       Enabled: True
+    #       DefaultCacheBehavior:
+    #         TargetOriginId: ScreenshotBucketOrigin
+    #         ViewerProtocolPolicy: redirect-to-https
+    #         ForwardedValues:
+    #           QueryString: True
+    #       Origins:
+    #         -
+    #           Id: ScreenshotBucketOrigin
+    #           DomainName: ${self:custom.bucket_name}.s3.amazonaws.com
+    #           CustomOriginConfig:
+    #             OriginProtocolPolicy: http-only
   Outputs:
     ScreenshotBucket:
       Description: "Screenshot bucket name"
       Value: ${self:custom.bucket_name}
-    CloudFrontUrl:
-      Description: "CloudFront url"
-      Value: {"Fn::GetAtt": "CloudFrontEndpoint.DomainName"}
-  
-  plugins:
-  - serverless-plugin-stage-variables
-  - serverless-plugin-stack-outputs
- 
-  
+    # CloudFrontUrl:
+    #   Description: "CloudFront url"
+    #   Value: {"Fn::GetAtt": "CloudFrontEndpoint.DomainName"}
 
+plugins:
+- serverless-plugin-stage-variables
+- serverless-plugin-stack-outputs
