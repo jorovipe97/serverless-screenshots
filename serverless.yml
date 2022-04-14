@@ -1,20 +1,4 @@
-# Welcome to Serverless!
-#
-# This file is the main config file for your service.
-# It's very minimal at this point and uses default values.
-# You can always add more config options for more control.
-# We've included some commented out config examples here.
-# Just uncomment any of them to get that config option.
-#
-# For full config options, check the docs:
-#    docs.serverless.com
-#
-# Happy Coding!
-
 service: adb-serverless-screenshots
-# app and org for use with dashboard.serverless.com
-#app: your-app-name
-#org: your-org-name
 
 # You can pin your service to only deploy with a specific Serverless version
 # Check out our docs for more details
@@ -22,13 +6,12 @@ frameworkVersion: '3'
 
 custom:
   # change this, so it's unique for your setup
-  bucket_name: ${self:provider.stage,opt:stage}-${env:USER}-screenshots
+  bucket_name: ${opt:stage, self:provider.stage}-${env:USER}-screenshots
 
   # these variables are passed on through ApiGateway, to be used
   # in your functions in the event.stageVariables
   stageVariables:
     bucketName: ${self:custom.bucket_name}
-    # endpoint: {"Fn::Join": ["", ["https://", { "Fn::GetAtt": "CloudFrontEndpoint.DomainName" }, "/"]]}
 
 provider:
   name: aws
@@ -46,6 +29,7 @@ provider:
     images:
       appimage:
         path: ./
+        file: Dockerfile
 
   # We need to give the lambda functions access to list and write to our bucket, it needs:
   # - to be able to 'list' the bucket
@@ -57,25 +41,34 @@ provider:
           Action:
               - "s3:ListBucket"
               - "s3:PutObject"
-          Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ThumbnailBucket" } ] ]  }
+          Resource:
+            - { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ThumbnailBucket" } ] ] }
+            - { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ThumbnailBucket" }, "/*" ] ] }
 
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
-
-# you can add packaging information here
-# https://stackoverflow.com/a/63383024/4086981
-# To solve: Unzipped size must be smaller than 262144000 bytes - AWS Lambda Error
+# To speed up the packaging upload.
 package:
   exclude:
     - node_modules/**
 
 functions:
   takeScreenshot:
-    # handler: src/take-screenshot.takeScreenshot
-    timeout: 15  # our screenshots can take a while sometimes
+    # If image is supplied, handler is not passed.
+    # instead is defined directly in the Dockerfile.
+    # handler: src/take-screenshot.handler
+    # https://www.serverless.com/framework/docs/providers/aws/guide/functions#referencing-container-image-as-a-target
     image:
       name: appimage
+      # You can Re-use the same container for multiple functions
+      # this is out-of-the-box supported by public.ecr.aws/lambda/nodejs:14 image.
+      # https://www.serverless.com/blog/container-support-for-lambda#re-using-the-same-container-for-multiple-functions
+      command:
+        - src/take-screenshot.takeScreenshot
+      entryPoint:
+        - '/lambda-entrypoint.sh'
+    # This is the max timeout allowed by API Gateway integrations.
+    # https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html#api-gateway-execution-service-limits-table
+    timeout: 30  # our screenshots can take a while sometimes
+    memorySize: 1536
     events:
       - http:
           path: /screenshot

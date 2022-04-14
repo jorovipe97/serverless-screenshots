@@ -1,5 +1,5 @@
 export const mockEvent = {
-  query: {
+  queryStringParameters: {
     url: 'https://gsm-adverts-uat.betstream.betgenius.com/singleadvertall/?c=Fanduel&cm=NFLHead2Head'
   },
   stageVariables: {

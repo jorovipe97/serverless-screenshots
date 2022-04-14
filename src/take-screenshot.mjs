@@ -1,17 +1,19 @@
 import captureWebsite from 'capture-website';
 import validUrl from 'valid-url';
 import crypto from 'crypto';
-import fs from 'fs';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { mockEvent } from '../events/take-screenshot.mjs'
 
 const env = process.env.NODE_ENV
-// TODO: Receive this from env variables.
+// TODO: Receive region from env variables.
 const client = new S3Client({ region: 'us-east-1' })
 
-export const takeScreenshot = async (event) => {
+export const takeScreenshot = async (event, context) => {
   console.log('Starting, takeScreenshot.')
-  const targetUrl = event.query.url;
+  console.log('event', event)
+  console.log('context', context)
+  console.log('accessKeyId', process.env.AWS_ACCESS_KEY_ID)
+  const targetUrl = event.queryStringParameters.url;
   const timeout = event.stageVariables.screenshotTimeout;
 
   // check if the given url is valid
@@ -27,34 +29,55 @@ export const takeScreenshot = async (event) => {
   const targetFilename = `${targetHash}/original.jpeg`;
   console.log(`Snapshotting ${targetUrl} to s3://${targetBucket}/${targetFilename}`);
 
-  // const path = env === 'local' ? `tmp/${targetHash}.png` : `/tmp/${targetHash}.png`
-
   try {
-    // if (await fileExists(path)) {
-    //   console.log(`File already exists, deleting: ${path}`)
-    //   // Deletes the file if already exists.
-    //   fs.unlinkSync(path)
-    // }
-
     const capturedImage = await captureWebsite.buffer(targetUrl, {
       timeout,
       width: 1920,
       height: 1080,
       disableAnimations: true,
-      type: 'jpeg'
+      type: 'jpeg',
+      // Options passed to puppeteer.launch().
+      // Required to solve this issue:
+      // https://stackoverflow.com/a/62348133/4086981
+      // And this:
+      // https://stackoverflow.com/a/62396078/4086981
+      launchOptions: {
+        headless: true,
+        args: [
+          '--single-process',
+          '--no-zygote',
+          '--no-sandbox',
+          '--disable-setuid-sandbox'
+        ]
+      }
     })
 
     // Upload capturedImage into s3 butcket.
     const command = new PutObjectCommand({
-      ACL: 'public-read',
+      // An access denied error could happen if you're trying to set ACL to "public-read"
+      // but the bucket is blocking public access. (Is not the case on this demo).
+      // https://stackoverflow.com/a/65316663/4086981
+      // ACL: 'public-read',
       Key: targetFilename,
       Body: capturedImage,
       Bucket: targetBucket,
       ContentType: 'image/jpeg',
     });
-    await client.send(command)
+    const response = await client.send(command)
+    console.log('response', response)
   } catch (error) {
     console.error(error)
+    return {
+      statusCode: 500,
+      body: JSON.stringify(
+        {
+          message: 'An error happened taking the screenshot :(',
+          errorMessage: error.message,
+        },
+        null,
+        2
+      ),
+    };
   }
   console.log('Screenshot taked succesfully.')
 
@@ -62,29 +85,21 @@ export const takeScreenshot = async (event) => {
     statusCode: 200,
     body: JSON.stringify(
       {
-        message: 'Go Serverless v1.0! Your function executed successfully!',
-        input: event,
+        message: 'Screenshot executed successfully!'
       },
       null,
       2
     ),
   };
-
-  // Use this code if you don't use the http event with the LAMBDA-PROXY integration
-  // return { message: 'Go Serverless v1.0! Your function executed successfully!', event };
 };
-
-async function fileExists (filepath) {
-  let flag = true;
-  try{
-    fs.accessSync(filepath, fs.constants.F_OK);
-  } catch (e) {
-    flag = false;
-  }
-  return flag;
-}
 
 // Invoke the function if executed locally.
 if (env === 'local') {
   takeScreenshot(mockEvent)
+    .then((res) => {
+      console.log(res)
+    })
+    .catch((err) => {
+      console.error(err)
+    })
 }
