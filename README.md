@@ -27,3 +27,7 @@ In general, use a container over a plain lambda when you benefit from having the
 ![Lambda internal lifecycle](https://i.stack.imgur.com/ikxx5.png)
 
 [Will the cold starts of my AWS Lambda function take longer if I use an ECR image/containers?](https://stackoverflow.com/questions/69512271/will-the-cold-starts-of-my-aws-lambda-function-take-longer-if-i-use-an-ecr-image)
+
+However, according to an user on this [Reddit thread](https://www.reddit.com/r/aws/comments/kqhri9/lambda_container_images_long_cold_starts/):
+
+> From my reading AWS has a huge docker cache on each server to help speed things up. They also can run a container without loading the entire container. It’s seems cool but I find it hard to believe the speeds would be the same as using a .zip.
